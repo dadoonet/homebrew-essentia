@@ -1,91 +1,69 @@
 class Essentia < Formula
   desc "Library for audio analysis and audio-based music information retrieval"
-  homepage "http://essentia.upf.edu"
-  head 'https://github.com/MTG/essentia.git'
+  homepage "https://essentia.upf.edu"
+  # Snapshot of master @ 7320015a (2026-09-30). The newest Git tag is v2.1_beta5
+  # from 2019. A source archive skips Git history and the test submodules
+  # (essentia-audio, essentia-models), which are not required to build.
+  url "https://github.com/MTG/essentia/archive/7320015a1cad3ac1dc038b52ef94803587d09986.tar.gz"
+  version "2.1-beta6-dev.20260930"
+  sha256 "bd087a181f1ffedbae318eea458566ce1e63c7012162a785d3c3aa7bcad18af5"
+  license "AGPL-3.0-only"
 
-  include Language::Python::Virtualenv
+  option "without-python", "Build without Python bindings"
 
   depends_on "pkg-config" => :build
-  depends_on "gcc" => :build
-  depends_on "eigen"
-  depends_on "libyaml"
-  depends_on "fftw"
-  depends_on "ffmpeg@2.8"
-  depends_on "libsamplerate"
-  depends_on "libtag"
   depends_on "chromaprint"
+  depends_on "eigen"
+  # This snapshot uses FFmpeg 5.1's channel layout API and still calls
+  # av_init_packet, removed in FFmpeg 6. ffmpeg@5 is the newest formula it
+  # can compile against.
+  depends_on "ffmpeg@5"
+  depends_on "fftw"
+  depends_on "libsamplerate"
+  depends_on "libyaml"
+  depends_on "numpy" if build.with?("python")
+  depends_on "python@3.14"
+  depends_on "taglib"
+
   depends_on "gaia" => :optional
-  depends_on "tensorflow" => :optional
+  depends_on "libtensorflow" => :optional
 
-  option "without-python", "Build without Python 3.9 support"
-
-  depends_on "python@3.9" if build.with? "python"
-  depends_on "numpy" if build.with? "python"
-
-  resource "six" do
-    url "https://files.pythonhosted.org/packages/21/9f/b251f7f8a76dec1d6651be194dfba8fb8d7781d10ab3987190de8391d08e/six-1.14.0.tar.gz"
-    sha256 "236bdbdce46e6e6a3d61a337c0f8b763ca1e8717c03b369e87a7ec7ce1319c0a"
+  def python3
+    formula_opt_bin("python@3.14")/"python3.14"
   end
 
   def install
-
-    build_flags = [
-      "--mode=release",
-      "--with-examples",
-      "--with-vamp",
-      "--prefix=#{prefix}"
+    python_site = prefix/"lib/python3.14/site-packages"
+    args = %W[
+      --mode=release
+      --with-examples
+      --with-vamp
+      --prefix=#{prefix}
     ]
-
-    if build.with? "gaia"
-      build_flags += ["--with-gaia"]
+    if build.with?("python")
+      args << "--with-python"
+      args << "--pythondir=#{python_site}"
     end
+    args << "--with-gaia" if build.with?("gaia")
+    args << "--with-tensorflow" if build.with?("libtensorflow")
 
-    if build.with? "tensorflow"
-      build_flags += ["--with-tensorflow"]
-    end
-
-    system Formula["python@3.9"].opt_bin/"python3", "waf", "configure", *build_flags
-    system Formula["python@3.9"].opt_bin/"python3", "waf"
-    system Formula["python@3.9"].opt_bin/"python3", "waf", "install"
-
-    python_flags = [
-      "--mode=release",
-      "--only-python",
-      "--prefix=#{prefix}"
-    ]
-
-    # Adding path to newly installed Essentia
-    ENV['PKG_CONFIG_PATH'] = "#{prefix}/lib/pkgconfig:" + ENV['PKG_CONFIG_PATH']
-
-    if build.with? "python"
-      system Formula["python@3.9"].opt_bin/"python3", "waf", "configure", *python_flags
-      system Formula["python@3.9"].opt_bin/"python3", "waf"
-      system Formula["python@3.9"].opt_bin/"python3", "waf", "install"
-
-      resource("six").stage do
-        system Formula["python@3.9"].opt_bin/"python3", *Language::Python.setup_install_args(libexec)
-      end
-
-      version = Language::Python.major_minor_version Formula["python@3.9"].opt_bin/"python3"
-      site_packages = "lib/python#{version}/site-packages"
-      pth_contents = "import site; site.addsitedir('#{libexec/site_packages}')\n"
-      (prefix/site_packages/"homebrew-essentia.pth").write pth_contents
-    end
+    system python3, "waf", "configure", *args
+    system python3, "waf"
+    system python3, "waf", "install"
   end
 
   test do
-    system "#{bin}/essentia_streaming_extractor_music",
+    system bin/"essentia_streaming_extractor_music",
            "/System/Library/Sounds/Glass.aiff",
            "Glass.json"
 
-    py_test = <<~EOS
-      import essentia.standard as estd
-      import essentia.streaming as estr
-      estd.MusicExtractor()("/System/Library/Sounds/Glass.aiff")
-    EOS
-
-    if build.with? "python"
-      system Formula["python@3.9"].opt_bin/"python3", "-c", "#{py_test}"
+    if build.with?("python")
+      ENV["PYTHONPATH"] = lib/"python3.14/site-packages"
+      system python3, "-c", <<~PYTHON
+        import essentia.standard as estd
+        import essentia.streaming as estr
+        estd.MusicExtractor()("/System/Library/Sounds/Glass.aiff")
+      PYTHON
     end
   end
 end

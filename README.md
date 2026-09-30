@@ -1,24 +1,30 @@
 # Homebrew-Essentia
-Homebrew formulas for Essentia and Gaia installation
 
-Install homebrew tap:
-```
-brew tap MTG/essentia
-```
+Homebrew formulas for Essentia and Gaia.
 
-Install compiling the latest code from the master branch: 
-```
-brew install essentia --HEAD
+```bash
+brew tap dadoonet/essentia
+brew install dadoonet/essentia/essentia
 ```
 
-Install from master branch with Gaia support:
-```
-brew install essentia --HEAD --with-gaia
+Essentia is installed from a source archive of `master` commit `7320015a`
+(2026-09-30, version `2.1-beta6-dev`). That archive does not include Git
+history or the `test/audio` and `test/models` submodules. The newest Git tag
+remains `v2.1_beta5` (2019).
+
+Python bindings for Python 3.14 are built by default. Skip them with:
+
+```bash
+brew install dadoonet/essentia/essentia --without-python
 ```
 
-Install from master branch with TensorFlow support:
-```
-brew install essentia --HEAD --with-tensorflow
+Optional features:
+
+```bash
+brew install dadoonet/essentia/essentia --with-gaia
+brew install dadoonet/essentia/essentia --with-libtensorflow
 ```
 
-By default, the installation includes Python bindings for Python 3 and ``python`` Homebrew formula will be installed as a dependency. If you want to avoid it and skip building python extension, use the ``--without-python`` flag. 
+Gaia is version 2.4.7 and uses Qt 5. Essentia links FFmpeg 5.1: current
+`master` still calls `av_init_packet`, which FFmpeg 6 removed, and it also
+requires the FFmpeg 5.1 channel-layout API.
