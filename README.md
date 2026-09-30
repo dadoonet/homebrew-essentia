@@ -25,6 +25,4 @@ brew install dadoonet/essentia/essentia --with-gaia
 brew install dadoonet/essentia/essentia --with-libtensorflow
 ```
 
-Gaia is version 2.4.7 and uses Qt 5. Essentia links FFmpeg 5.1: current
-`master` still calls `av_init_packet`, which FFmpeg 6 removed, and it also
-requires the FFmpeg 5.1 channel-layout API.
+Gaia is version 2.4.7 and uses Qt 5. Essentia links the current FFmpeg formula.

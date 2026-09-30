@@ -14,10 +14,7 @@ class Essentia < Formula
   depends_on "pkg-config" => :build
   depends_on "chromaprint"
   depends_on "eigen"
-  # This snapshot uses FFmpeg 5.1's channel layout API and still calls
-  # av_init_packet, removed in FFmpeg 6. ffmpeg@5 is the newest formula it
-  # can compile against.
-  depends_on "ffmpeg@5"
+  depends_on "ffmpeg"
   depends_on "fftw"
   depends_on "libsamplerate"
   depends_on "libyaml"
@@ -36,6 +33,26 @@ class Essentia < Formula
     # Python 3.12 removed distutils. This import is unused.
     inreplace "src/examples/wscript", "import distutils.sysconfig\n", ""
 
+    # FFmpeg 7 removed AVCodec::sample_fmts. Chromaprint pulls in current FFmpeg,
+    # whose headers are the ones this build sees.
+    inreplace "src/essentia/utils/audiocontext.cpp" do |s|
+      s.gsub!(/if \(audioCodec->sample_fmts\) \{.*?sample_fmts\[0\];\n\s+\}\n\s+\}/m, <<~CPP)
+        const enum AVSampleFormat* sample_fmts = nullptr;
+        if (avcodec_get_supported_config(nullptr, audioCodec, AV_CODEC_CONFIG_SAMPLE_FORMAT,
+                                         0, reinterpret_cast<const void**>(&sample_fmts), nullptr) >= 0
+            && sample_fmts) {
+          const enum AVSampleFormat* p = sample_fmts;
+          bool found = false;
+          while (*p != AV_SAMPLE_FMT_NONE) {
+            if (*p == desired_fmt) { found = true; break; }
+            ++p;
+          }
+          if (!found)
+            desired_fmt = sample_fmts[0];
+        }
+      CPP
+    end
+
     python_site = prefix/"lib/python3.14/site-packages"
     args = %W[
       --mode=release
@@ -53,6 +70,20 @@ class Essentia < Formula
     system python3, "waf", "configure", *args
     system python3, "waf"
     system python3, "waf", "install"
+
+    # waf records the build-directory dylib path into executables. Point them
+    # at the installed library; Homebrew then rewrites that cellar path to opt.
+    libessentia = lib/"libessentia.dylib"
+    mach_files = Pathname.glob("#{bin}/*") + Pathname.glob("#{lib}/**/*.{dylib,so}")
+    mach_files.each do |file|
+      next unless file.file?
+
+      old = Utils.popen_read("otool", "-L", file).lines.filter_map { |line| line.strip.split.first }
+                 .find { |path| path.end_with?("/libessentia.dylib") && path != libessentia.to_s }
+      next if old.nil?
+
+      system "install_name_tool", "-change", old, libessentia, file
+    end
   end
 
   test do
