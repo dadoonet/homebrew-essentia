@@ -33,6 +33,9 @@ class Essentia < Formula
   end
 
   def install
+    # Python 3.12 removed distutils. This import is unused.
+    inreplace "src/examples/wscript", "import distutils.sysconfig\n", ""
+
     python_site = prefix/"lib/python3.14/site-packages"
     args = %W[
       --mode=release
